@@ -12,6 +12,7 @@ const clearFlaskApiKey:string = process.env.CLEAR_FLASK_API_KEY!
 
 app.use(cors());
 app.use(express.json())
+app.use(express.urlencoded({ extended: true }));
 
 app.use((req:Request, res: Response, next)=>{
     console.log("USED METHOD: "+ req.method);
