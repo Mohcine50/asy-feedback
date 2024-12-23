@@ -5,11 +5,7 @@ export class RedisService {
 
     private redisClient: Redis
     constructor() {
-        this.redisClient = new Redis({
-            host: process.env.REDIS_HOST,
-            port: Number(process.env.REDIS_PORT),
-            password: process.env.REDIS_PASSWORD
-        })
+        this.redisClient = new Redis(process.env.REDIS_PUBLIC_URL!)
     }
 
     async addRedisData(key: string , value: string){
