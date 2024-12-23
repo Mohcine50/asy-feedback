@@ -1,49 +1,59 @@
+import 'dotenv/config'
+import cron from 'node-cron';
 import express, { Express, Request, Response } from "express";
-import dotenv from "dotenv";
-import cors from "cors";
 
-dotenv.config();
+import cors from "cors";
+import { ClearFlaskService } from "./services/clear-flask";
+import { LinearService } from "./services/linear";
+import {RedisService} from "./services/redis";
+
 
 const app: Express = express();
 const port = process.env.PORT || 3000;
 
-const clearFlaskApiUrl:string = process.env.CLEAR_FLASK_API_URL!
-const clearFlaskApiKey:string = process.env.CLEAR_FLASK_API_KEY!
+const REDIS_TIMESTAMP_KEY = "lastAddedFeedbackTimeStamp"
+const REDIS_LINEAR_Team_KEY = "linearTeamKey"
+const REDIS_LINEAR_Team_ID = "linearTeamID"
 
 app.use(cors());
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }));
 
-app.use((req:Request, res: Response, next)=>{
-    console.log("USED METHOD: "+ req.method);
-    next()
+const clearFlaskService = new ClearFlaskService()
+const linear = new LinearService()
+const redis = new  RedisService()
+
+const schedule = process.env.CRON_SCHEDULE || '* * * * *';
+
+
+cron.schedule(schedule, async ()=>{
+    const feedbacks = await clearFlaskService.fetchFeedbacks()
+
+    if (!feedbacks || !feedbacks.length) return
+
+    const last = await redis.retrieveRedisData(REDIS_TIMESTAMP_KEY);
+
+    const teamKey = await redis.retrieveRedisData(REDIS_TIMESTAMP_KEY);
+
+    if (!teamKey || teamKey !== process.env.LINEAR_TEAM_KEY!){
+        const team = await linear.getTeamByKey();
+        await redis.addRedisData(REDIS_LINEAR_Team_KEY, process.env.LINEAR_TEAM_KEY!);
+        await redis.addRedisData(REDIS_LINEAR_Team_ID, team?.id!);
+    }
+
+    const teamID = await redis.retrieveRedisData(REDIS_LINEAR_Team_ID);
+
+    let filteredFeedback = feedbacks
+
+    if (last) {
+        filteredFeedback = feedbacks?.filter(feedback => new Date(feedback.created).getTime() > new Date(last).getTime()) ?? []
+    }
+
+    if (!filteredFeedback || !filteredFeedback.length) return
+
+    linear.submitIssuesToLinear(teamID!, filteredFeedback)
+    await redis.addRedisData(REDIS_TIMESTAMP_KEY, filteredFeedback[0].created);
 })
-
-
-app.get("/", (req: Request, res: Response) => {
-    res.send("Welcome");
-});
-
-app.post('/webhook', (req: Request, res: Response) => {
-    const event = req.body;
-
-    console.log(req.body)
-    console.log('Received webhook event:', event);
-
-    res.status(200).send('Webhook received');
-});
-
-app.post('/', (req: Request, res: Response) => {
-    const event = req.body;
-
-    console.log(req.body)
-    console.log('Received webhook event:', event);
-
-    res.status(200).send('Webhook received');
-});
-
-
-
 
 
 app.listen(port, () => {
