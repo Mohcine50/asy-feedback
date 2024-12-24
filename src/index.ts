@@ -10,6 +10,7 @@ import {RedisService} from "./services/redis";
 
 const app: Express = express();
 const port = process.env.PORT || 3000;
+const schedule = process.env.CRON_SCHEDULE || '* * * * *';
 
 const REDIS_TIMESTAMP_KEY = "lastAddedFeedbackTimeStamp"
 const REDIS_LINEAR_Team_KEY = "linearTeamKey"
@@ -23,10 +24,12 @@ const clearFlaskService = new ClearFlaskService()
 const linear = new LinearService()
 const redis = new  RedisService()
 
-const schedule = process.env.CRON_SCHEDULE || '* * * * *';
+
 
 
 cron.schedule(schedule, async ()=>{
+
+
     const feedbacks = await clearFlaskService.fetchFeedbacks()
 
     if (!feedbacks || !feedbacks.length) return
@@ -53,6 +56,7 @@ cron.schedule(schedule, async ()=>{
 
     linear.submitIssuesToLinear(teamID!, filteredFeedback)
     await redis.addRedisData(REDIS_TIMESTAMP_KEY, filteredFeedback[0].created);
+
 })
 
 
