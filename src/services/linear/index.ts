@@ -4,6 +4,7 @@ import {Feedback} from "../clear-flask/types";
 
 import TurndownService from "turndown";
 import {processImages} from "../../utils";
+import he from "he";
 
 export class LinearService {
 
@@ -44,25 +45,11 @@ export class LinearService {
     submitIssuesToLinear(teamID:string ,feedbacks: Feedback[]){
         feedbacks.forEach(async (feedback) => {
 
-            const {imageSources, description} = processImages(feedback.description)
-
             const createdIssue = await this.createIssue({
                 teamId: teamID,
                 title: feedback.title,
-                description: this.turndownService.turndown(description),
+                description: this.turndownService.turndown(he.decode(feedback.description)),
             })
-
-            const issue = await createdIssue.issue
-            if (imageSources.length > 0){
-                for (const src of imageSources) {
-                    const idx = imageSources.indexOf(src);
-                    await this.linearClient.createAttachment({
-                        issueId: issue?.id!,
-                        title: `${issue?.title}-att-${idx+1}`,
-                        url: decodeURIComponent(src)
-                    })
-                }
-            }
 
         })
 
