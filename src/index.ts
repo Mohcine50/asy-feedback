@@ -6,6 +6,7 @@ import cors from "cors";
 import { ClearFlaskService } from "./services/clear-flask";
 import { LinearService } from "./services/linear";
 import {RedisService} from "./services/redis";
+import {IssueLabel} from "@linear/sdk";
 
 
 const app: Express = express();
@@ -15,6 +16,7 @@ const schedule = process.env.CRON_SCHEDULE || '* * * * *';
 const REDIS_TIMESTAMP_KEY = "lastAddedFeedbackTimeStamp"
 const REDIS_LINEAR_Team_KEY = "linearTeamKey"
 const REDIS_LINEAR_Team_ID = "linearTeamID"
+const REDIS_LINEAR_LABEL_ID = "linearLabelId"
 
 app.use(cors());
 app.use(express.json())
@@ -30,6 +32,7 @@ const redis = new  RedisService()
 cron.schedule(schedule, async ()=>{
 
 
+
     const feedbacks = await clearFlaskService.fetchFeedbacks()
 
     if (!feedbacks || !feedbacks.length) return
@@ -37,6 +40,10 @@ cron.schedule(schedule, async ()=>{
     const last = await redis.retrieveRedisData(REDIS_TIMESTAMP_KEY);
 
     const teamKey = await redis.retrieveRedisData(REDIS_TIMESTAMP_KEY);
+
+    let labelId = await redis.retrieveRedisData(REDIS_LINEAR_LABEL_ID);
+
+
 
     if (!teamKey || teamKey !== process.env.LINEAR_TEAM_KEY!){
         const team = await linear.getTeamByKey();
@@ -46,6 +53,18 @@ cron.schedule(schedule, async ()=>{
 
     const teamID = await redis.retrieveRedisData(REDIS_LINEAR_Team_ID);
 
+    if (!labelId){
+        let label = await linear.getLabelByName()
+
+        if(!label) {
+            label = await linear.createLabel(teamID!) as IssueLabel
+        }
+
+        await redis.addRedisData(REDIS_LINEAR_LABEL_ID, label.id)
+        labelId = await redis.retrieveRedisData(REDIS_LINEAR_LABEL_ID);
+    }
+
+
     let filteredFeedback = feedbacks
 
     if (last) {
@@ -54,7 +73,7 @@ cron.schedule(schedule, async ()=>{
 
     if (!filteredFeedback || !filteredFeedback.length) return
 
-    linear.submitIssuesToLinear(teamID!, filteredFeedback)
+    linear.submitIssuesToLinear(teamID!,labelId!, filteredFeedback)
     await redis.addRedisData(REDIS_TIMESTAMP_KEY, filteredFeedback[0].created);
 
 })

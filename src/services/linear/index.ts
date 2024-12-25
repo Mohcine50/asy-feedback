@@ -3,7 +3,6 @@ import {IssueCreateInput} from "@linear/sdk/dist/_generated_documents";
 import {Feedback} from "../clear-flask/types";
 
 import TurndownService from "turndown";
-import {processImages} from "../../utils";
 import he from "he";
 
 export class LinearService {
@@ -26,12 +25,33 @@ export class LinearService {
 
     async getTeamByKey() {
 
-        const teams = await this.linearClient.teams()
+        const teams = await this.linearClient.teams({filter:{
+            key:{
+                eq:this.linearTeamKey
+            }
+            }})
 
+        return teams.nodes[0]
+    }
 
-        const team = teams.nodes.find(t=> t.key === this.linearTeamKey)
+    async getLabelByName() {
+        const labels = await this.linearClient.issueLabels({
+            filter:{
+                name: {eq:"ClearFlask"}
+            }
+        })
 
-        return team
+        return labels.nodes[0]
+
+    }
+
+    async createLabel(teamId:string){
+        const createdLable = await  this.linearClient.createIssueLabel({
+            name:"ClearFlask",
+            teamId: teamId
+        })
+
+        return createdLable.issueLabel;
     }
 
 
@@ -42,13 +62,14 @@ export class LinearService {
         return createdIssue
     }
 
-    submitIssuesToLinear(teamID:string ,feedbacks: Feedback[]){
+    submitIssuesToLinear(teamID: string , labelId: string,feedbacks: Feedback[]){
         feedbacks.forEach(async (feedback) => {
 
             const createdIssue = await this.createIssue({
                 teamId: teamID,
                 title: feedback.title,
                 description: this.turndownService.turndown(he.decode(feedback.description)),
+                labelIds:[labelId]
             })
 
         })
